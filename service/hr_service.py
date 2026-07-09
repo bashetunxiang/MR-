@@ -1,349 +1,378 @@
 from entity import organizations as o
 from util import public_tools as tool
 from util import io_tools as io
-import datetime
-import calendar
+from service import attendance_service as ats
+from service import record_service as rds
+from service import statistics_service as sts
 
 
-# 加载数据
+# ==========================
+# 数据初始化
+# ==========================
 def load_emp_data():
-    io.checking_data_file()      # 文件自检
-    io.load_users()               # 载入管理员账号
-    io.load_lock_record()         # 载入打卡记录
-    io.load_employee_info()       # 载入员工信息
-    io.load_employee_pic()        # 载入员工照片
+
+    io.checking_data_file()
+
+    io.load_users()
+
+    io.load_lock_record()
+
+    io.load_employee_info()
+
+    io.load_employee_pic()
 
 
-
-# 添加新员工
+# ==========================
+# 添加新人员
+# ==========================
 def add_new_employee(name):
-    code = tool.randomCode()                       # 生成随机特征码
-    newEmp = o.Employee(o.get_new_id(), name, code) # 创建员工对象
-    o.add(newEmp)                                  # 组织结构中添加新员工
-    io.save_employee_all()                         # 保存最新的员工信息
-    return code                                    # 返回新员工的特征码
+
+    code = tool.randomCode()
+
+    emp = o.Employee(
+
+        o.get_new_id(),
+
+        name,
+
+        code
+
+    )
+
+    o.add(emp)
+
+    io.save_employee_all()
+
+    return code
 
 
-# 删除某个员工
+# ==========================
+# 删除人员
+# ==========================
 def remove_employee(id):
-    tool.remove_pics(id)       # 删除该员工所有图片
-    o.remove(id)               # 从组织结构中删除
-    io.save_employee_all()     # 保存最新的员工信息
-    io.save_lock_record()      # 保存最新的打卡记录
+
+    io.remove_pics(id)
+
+    o.remove(id)
+
+    io.save_employee_all()
+
+    io.save_lock_record()
 
 
-# 为指定员工添加打卡记录
-def add_lock_record(name):
-    record = o.LOCK_RECORD
-    now_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # 当前时间
-
-    if name in record.keys():          # 如果这个人有打卡记录
-        r_list = record[name]          # 取出他的记录
-
-        if len(r_list) == 0:           # 如果记录为空
-            r_list = list()            # 创建新列表
-
-        r_list.append(now_time)        # 记录当前时间
-
-    else:                              # 如果这个人从未打过卡
-        r_list = list()                # 创建新列表
-        r_list.append(now_time)        # 记录当前时间
-        record[name] = r_list          # 将记录保存在字典中
-
-    io.save_lock_record()              # 保存所有打卡记录
-
-
-# 所有员工信息报表
-def get_employee_report():
-    report = "########################################\n"
-    report += "员工名单如下所示：\n"
-    i = 0
+# ==========================
+# 判断ID是否存在
+# ==========================
+def check_id(id):
 
     for emp in o.EMPLOYEES:
-        report += "(" + str(emp.id) + ")" + emp.name + "\t"
-        i += 1
 
-        if i == 4:
-            report += "\n"
-            i = 0
+        if int(emp.id) == int(id):
 
-    report = report.strip()
-    report += "\n########################################"
+            return True
+
+    return False
+
+
+# ==========================
+# 根据特征码获取姓名
+# ==========================
+def get_name_with_code(code):
+
+    for emp in o.EMPLOYEES:
+
+        if str(emp.code) == str(code):
+
+            return emp.name
+
+    return None
+
+
+# ==========================
+# 根据ID获取特征码
+# ==========================
+def get_code_with_id(id):
+
+    for emp in o.EMPLOYEES:
+
+        if int(emp.id) == int(id):
+
+            return emp.code
+
+    return None
+
+
+# ==========================
+# 获取人员对象
+# ==========================
+def get_employee(id):
+
+    for emp in o.EMPLOYEES:
+
+        if int(emp.id) == int(id):
+
+            return emp
+
+    return None
+
+
+# ==========================
+# 获取所有人员
+# ==========================
+def get_all_employee():
+
+    return o.EMPLOYEES
+
+
+# ==========================
+# 人员总数
+# ==========================
+def employee_count():
+
+    return len(o.EMPLOYEES)
+
+
+# ==========================
+# 人员列表
+# ==========================
+def get_employee_report():
+
+    report = ""
+
+    report += "==============================\n"
+
+    report += "      体育馆人员列表\n"
+
+    report += "==============================\n"
+
+    report += "编号\t姓名\n"
+
+    for emp in o.EMPLOYEES:
+
+        report += "{}\t{}\n".format(
+
+            emp.id,
+
+            emp.name
+
+        )
+
+    report += "=============================="
+
     return report
 
 
-# 检查 id 是否存在
-def check_id(id):
-    for emp in o.EMPLOYEES:
-        if str(id) == str(emp.id):
-            return True
-
-    return False
-
-
-# 通过特征码获取员工姓名
-def get_name_with_code(code):
-    for emp in o.EMPLOYEES:
-        if str(code) == str(emp.code):
-            return emp.name
-
-
-# 通过 id 获取员工特征码
-def get_code_with_id(id):
-    for emp in o.EMPLOYEES:
-        if str(id) == str(emp.id):
-            return emp.code
-
-
-# 验证管理员账号和密码
+# ==========================
+# 管理员登录
+# ==========================
 def valid_user(username, password):
-    if username in o.USERS.keys():
-        if o.USERS.get(username) == password:
-            return True
 
-    return False
+    if username not in o.USERS:
 
+        return False
 
-# 保存上下班时间
-def save_work_time(work_time, close_time):
-    o.WORK_TIME = work_time
-    o.CLOSING_TIME = close_time
-    io.save_work_time_config()
+    return o.USERS[username] == password
 
 
-# 打印指定日期的打卡日报
-def get_day_report(date):
-    io.load_work_time_config()  # 读取上下班时间
-
-    # 今天 0 点
-    earliest_time = datetime.datetime.strptime(
-        date + " 00:00:00", "%Y-%m-%d %H:%M:%S"
-    )
-
-    # 今天中午 12 点
-    noon_time = datetime.datetime.strptime(
-        date + " 12:00:00", "%Y-%m-%d %H:%M:%S"
-    )
-
-    # 今晚 0 点之前
-    latest_time = datetime.datetime.strptime(
-        date + " 23:59:59", "%Y-%m-%d %H:%M:%S"
-    )
-
-    # 上班时间
-    work_time = datetime.datetime.strptime(
-        date + " " + o.WORK_TIME, "%Y-%m-%d %H:%M:%S"
-    )
-
-    # 下班时间
-    closing_time = datetime.datetime.strptime(
-        date + " " + o.CLOSING_TIME, "%Y-%m-%d %H:%M:%S"
-    )
-
-    late_list = []        # 迟到名单
-    left_early = []       # 早退名单
-    absent_list = []      # 缺席名单
-
-    for emp in o.EMPLOYEES:
-        if emp.name in o.LOCK_RECORD.keys():
-            emp_lock_list = o.LOCK_RECORD.get(emp.name)
-            is_absent = True
-
-            for lock_time_str in emp_lock_list:
-                lock_time = datetime.datetime.strptime(
-                    lock_time_str, "%Y-%m-%d %H:%M:%S"
-                )
-
-                # 如果当天有打卡记录
-                if earliest_time < lock_time < latest_time:
-                    is_absent = False
-
-                    # 上班时间后，中午之前打卡，算迟到
-                    if work_time < lock_time <= noon_time:
-                        late_list.append(emp.name)
-
-                    # 中午之后，下班之前打卡，算早退
-                    if noon_time < lock_time < closing_time:
-                        left_early.append(emp.name)
-
-            if is_absent:
-                absent_list.append(emp.name)
-
-        else:
-            absent_list.append(emp.name)
-
-    emp_count = len(o.EMPLOYEES)
-
-    print("--------" + date + "--------")
-    print("应到人数：" + str(emp_count))
-    print("缺席人数：" + str(len(absent_list)))
-
-    absent_name = ""
-    if len(absent_list) == 0:
-        absent_name = "（空）"
-    else:
-        for name in absent_list:
-            absent_name += name + " "
-    print("缺席名单：" + absent_name)
-
-    print("迟到人数：" + str(len(late_list)))
-
-    late_name = ""
-    if len(late_list) == 0:
-        late_name = "（空）"
-    else:
-        for name in late_list:
-            late_name += name + " "
-    print("迟到名单：" + late_name)
-
-    print("早退人数：" + str(len(left_early)))
-
-    early_name = ""
-    if len(left_early) == 0:
-        early_name = "（空）"
-    else:
-        for name in left_early:
-            early_name += name + " "
-    print("早退名单：" + early_name)
-
-
-# 打印今天的打卡日报
-def get_today_report():
-    date = datetime.datetime.now().strftime("%Y-%m-%d")
-    get_day_report(str(date))
-
-
-# 创建指定月份的打卡记录月报
-def get_month_report(month):
-    io.load_work_time_config()  # 读取上下班时间
-
-    date = datetime.datetime.strptime(month, "%Y-%m")
-    monthRange = calendar.monthrange(date.year, date.month)[1]
-
-    month_first_day = datetime.date(date.year, date.month, 1)
-    month_last_day = datetime.date(date.year, date.month, monthRange)
-
-    clock_in = "I"       # 正常上班打卡标志
-    clock_out = "O"      # 正常下班打卡标志
-    late = "L"           # 迟到标志
-    left_early = "E"     # 早退标志
-    absent = "A"         # 缺席标志
-
-    lock_report = dict()  # 键为员工名，值为员工打卡情况列表
-
-    for emp in o.EMPLOYEES:
-        emp_lock_data = []  # 员工打卡情况列表
-
-        if emp.name in o.LOCK_RECORD.keys():
-            emp_lock_list = o.LOCK_RECORD.get(emp.name)
-            index_day = month_first_day
-
-            while index_day <= month_last_day:
-                is_absent = True
-
-                earliest_time = datetime.datetime.strptime(
-                    str(index_day) + " 00:00:00",
-                    "%Y-%m-%d %H:%M:%S"
-                )
-
-                noon_time = datetime.datetime.strptime(
-                    str(index_day) + " 12:00:00",
-                    "%Y-%m-%d %H:%M:%S"
-                )
-
-                latest_time = datetime.datetime.strptime(
-                    str(index_day) + " 23:59:59",
-                    "%Y-%m-%d %H:%M:%S"
-                )
-
-                work_time = datetime.datetime.strptime(
-                    str(index_day) + " " + o.WORK_TIME,
-                    "%Y-%m-%d %H:%M:%S"
-                )
-
-                closing_time = datetime.datetime.strptime(
-                    str(index_day) + " " + o.CLOSING_TIME,
-                    "%Y-%m-%d %H:%M:%S"
-                )
-
-                emp_today_data = ""
-
-                for lock_time_str in emp_lock_list:
-                    lock_time = datetime.datetime.strptime(
-                        lock_time_str,
-                        "%Y-%m-%d %H:%M:%S"
-                    )
-
-                    # 如果当前日期有打卡记录
-                    if earliest_time < lock_time < latest_time:
-                        is_absent = False
-
-                        # 上班时间前打卡
-                        if lock_time <= work_time:
-                            emp_today_data += clock_in
-
-                        # 下班时间后打卡
-                        elif lock_time >= closing_time:
-                            emp_today_data += clock_out
-
-                        # 上班时间后，中午之前打卡
-                        elif work_time < lock_time <= noon_time:
-                            emp_today_data += late
-
-                        # 中午之后，下班之前打卡
-                        elif noon_time < lock_time < closing_time:
-                            emp_today_data += left_early
-
-                if is_absent:
-                    emp_today_data = absent
-
-                emp_lock_data.append(emp_today_data)
-                index_day = index_day + datetime.timedelta(days=1)
-
-        else:
-            index_day = month_first_day
-
-            while index_day <= month_last_day:
-                emp_lock_data.append(absent)
-                index_day = index_day + datetime.timedelta(days=1)
-
-        lock_report[emp.name] = emp_lock_data
-
-    report = "\\姓名 / 日期\\"
-    index_day = month_first_day
-
-    while index_day <= month_last_day:
-        report += "," + str(index_day.day)
-        index_day = index_day + datetime.timedelta(days=1)
-
-    report += "\n"
-
-    for emp in lock_report.keys():
-        report += emp + ","
-        data_list = lock_report.get(emp)
-
-        for data in data_list:
-            report += data + ","
-
-        report += "\n"
-
-    # CSV 文件标题日期
-    title_date = month_first_day.strftime("%Y年%m月")
-    file_name = title_date + "考勤月报"
-
-    # 生成 CSV 文件
-    io.create_CSV(file_name, report)
-
-
-# 创建上个月打卡记录月报
-def get_pre_month_report():
-    today = datetime.date.today()
-    pre_month = today + datetime.timedelta(days=-1)
-    pre_month = pre_month.strftime("%Y-%m")
-    get_month_report(pre_month)
-
+# ==========================
+# 获取全部打卡记录
+# ==========================
 def get_record_all():
-    """
-    获取所有打卡记录
-    """
-    return o.LOCK_RECORD
+
+    return rds.get_all_records()
+
+
+# ==========================
+# 获取当前在馆人员
+# ==========================
+def get_online_people():
+
+    return rds.get_online_people()
+
+
+# ==========================
+# 当前在馆人数
+# ==========================
+def get_online_count():
+
+    return rds.get_online_count()
+# ==========================
+# 今日到馆人数
+# ==========================
+def get_today_total():
+
+    return sts.today_total()
+
+
+# ==========================
+# 今日离馆人数
+# ==========================
+def get_leave_total():
+
+    return sts.leave_total()
+
+
+# ==========================
+# 平均停留时间
+# ==========================
+def get_average_stay():
+
+    return sts.average_stay_time()
+
+
+# ==========================
+# 最近进入体育馆人员
+# ==========================
+def get_latest_people(number=10):
+
+    return sts.latest_people(number)
+
+
+# ==========================
+# 人流高峰
+# ==========================
+def get_peak_hour():
+
+    return sts.peak_hour()
+
+
+# ==========================
+# 今日趋势
+# ==========================
+def get_today_trend():
+
+    return sts.today_trend()
+
+
+# ==========================
+# 首页统计数据
+# ==========================
+def get_dashboard():
+
+    return sts.dashboard()
+
+
+# ==========================
+# 获取折线图数据
+# ==========================
+def get_line_chart():
+
+    return sts.line_chart()
+
+
+# ==========================
+# 获取饼图数据
+# ==========================
+def get_pie_chart():
+
+    return sts.pie_chart()
+
+
+# ==========================
+# 根据姓名查询人员
+# ==========================
+def get_employee_by_name(name):
+
+    for emp in o.EMPLOYEES:
+
+        if emp.name == name:
+
+            return emp
+
+    return None
+
+
+# ==========================
+# 根据编号查询人员
+# ==========================
+def get_employee_by_id(person_id):
+
+    for emp in o.EMPLOYEES:
+
+        if int(emp.id) == int(person_id):
+
+            return emp
+
+    return None
+
+
+# ==========================
+# 查询打卡记录
+# ==========================
+def get_record(person_id):
+
+    return rds.get_record(person_id)
+
+
+# ==========================
+# 删除打卡记录
+# ==========================
+def delete_record(person_id):
+
+    return rds.delete_record(person_id)
+
+
+# ==========================
+# 清空打卡记录
+# ==========================
+def clear_record():
+
+    return rds.clear_records()
+
+
+# ==========================
+# 判断人员是否在馆
+# ==========================
+def is_online(person_id):
+
+    return rds.is_online(person_id)
+
+
+# ==========================
+# 人员进入体育馆
+# ==========================
+def person_enter(person):
+
+    record = ats.person_enter(person)
+
+    if record is not None:
+
+        rds.save_record(record)
+
+    return record
+
+
+# ==========================
+# 人员离馆
+# ==========================
+def person_leave(person_id):
+
+    record = ats.person_leave(person_id)
+
+    if record is not None:
+
+        rds.update_record(record)
+
+    return record
+
+
+# ==========================
+# 系统首页信息
+# ==========================
+def system_info():
+
+    data = {
+
+        "employee_count": employee_count(),
+
+        "today_total": get_today_total(),
+
+        "online_total": get_online_count(),
+
+        "leave_total": get_leave_total(),
+
+        "average_stay": get_average_stay()
+
+    }
+
+    return data

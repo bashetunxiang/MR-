@@ -1,256 +1,329 @@
-from util import camera
 from util import public_tools as tool
+from util import camera
 from service import hr_service as hr
 
 
-ADMIN_LOGIN = False      # 管理员登录状态
+ADMIN_LOGIN = False
 
 
+# ==========================
 # 管理员登录
+# ==========================
 def login():
+    global ADMIN_LOGIN
+
     while True:
-        username = input(" 请输入管理员账号（输入0取消操作）：")
+        username = input("请输入管理员账号（输入0取消操作）：").strip()
+
         if username == "0":
-            return
-        password = input(" 请输入管理员密码：")
-        if hr.valid_user(username.strip(), password.strip()):  # 校验账号和密码
-            global ADMIN_LOGIN                                 # 读取全局变量
-            ADMIN_LOGIN = True                                 # 设置为管理员已登录状态
-            print(username + " 登录成功！ 请选择重新选择功能菜单")
-            break
+            return False
+
+        password = input("请输入管理员密码：").strip()
+
+        if hr.valid_user(username, password):
+            ADMIN_LOGIN = True
+            print(username + " 登录成功！")
+            return True
         else:
-            print("账号或密码错误，请重新输入！ ")
+            print("账号或密码错误，请重新输入！")
             print("-----------------------------")
 
 
-# 启动方法
+# ==========================
+# 检查管理员是否登录
+# ==========================
+def check_login():
+    if ADMIN_LOGIN:
+        return True
+
+    print("该功能需要管理员登录！")
+    return login()
+
+
+# ==========================
+# 系统启动
+# ==========================
 def start():
-    finish = False  # 程序结束标志
+    finish = False
+
     menu = """
 +------------------------------------------------+
-|                   主功能菜单                    |
+|              体育馆视频打卡系统                |
 +------------------------------------------------+
-①打卡   ②查看记录   ③员工管理   ④考勤报表   ⑤退出
---------------------------------------------------"""
+① 人员进入场馆
+② 人员离开场馆
+③ 人员管理
+④ 查看在馆人员
+⑤ 数据统计
+⑥ 查看全部记录
+⑦ 摄像头预览
+⑧ 退出系统
+--------------------------------------------------
+"""
 
     while not finish:
         print(menu)
-        option = input(" 请输入菜单序号：")       # 打印菜单
+        option = input("请输入菜单序号：").strip()
 
         if option == "1":
-            face_clock()                         # 如果选择“打卡”
+            person_enter()
 
         elif option == "2":
-            if ADMIN_LOGIN:                      # 如果选择“查看记录”
-                check_record()                   # 如果管理员已登录，进入查看记录方法
-            else:
-                login()                          # 先让管理员登录
+            if check_login():
+                person_leave()
 
         elif option == "3":
-            if ADMIN_LOGIN:                      # 如果选择“员工管理”
-                employee_management()            # 进入员工管理方法
-            else:
-                login()                          # 先让管理员登录
+            if check_login():
+                employee_management()
 
         elif option == "4":
-            if ADMIN_LOGIN:                      # 如果选择“考勤报表”
-                check_report()                   # 进入考勤报表方法
-            else:
-                login()                          # 先让管理员登录
+            if check_login():
+                show_online_people()
 
         elif option == "5":
-            finish = True                        # 如果选择“退出”
+            if check_login():
+                show_statistics()
+
+        elif option == "6":
+            if check_login():
+                show_all_records()
+
+        elif option == "7":
+            camera.preview()
+
+        elif option == "8":
+            finish = True
 
         else:
-            print(" 输入的指令有误，请重新输入！ ")
+            print("输入的指令有误，请重新输入！")
 
-    print("Bye Bye !")
-
-
-# 人脸打卡
-def face_clock():
-    print(" 请正面对准摄像头进行打卡 ")
-    name = camera.clock_in()                     # 开启摄像头，返回打卡员工名称
-
-    if name is not None:                         # 如果员工名称有效
-        hr.add_lock_record(name)                 # 保存打卡记录
-        print(name + " 打卡成功！ ")
+    print("Bye Bye!")
 
 
-# 员工管理
+# ==========================
+# 人员进入场馆
+# ==========================
+def person_enter():
+    print("请正面对准摄像头，系统正在识别...")
+
+    record = camera.clock_in()
+
+    if record is not None:
+        print("\n进入场馆成功！")
+        print_record(record)
+    else:
+        print("未识别到有效人员，进入失败。")
+
+
+# ==========================
+# 人员离开场馆
+# ==========================
+def person_leave():
+    print(hr.get_employee_report())
+
+    try:
+        person_id = int(input("请输入离馆人员编号（输入0取消）：").strip())
+    except ValueError:
+        print("输入格式错误，请输入数字编号！")
+        return
+
+    if person_id == 0:
+        return
+
+    if not hr.check_id(person_id):
+        print("无此人员，操作取消！")
+        return
+
+    record = camera.clock_out(person_id)
+
+    if record is not None:
+        print("\n离馆成功！")
+        print_record(record)
+    else:
+        print("该人员当前不在馆，无法离馆。")
+
+
+# ==========================
+# 人员管理
+# ==========================
 def employee_management():
     menu = """
 +------------------------------------------------+
-|                员工管理功能菜单                |
+|                人员管理功能菜单                |
 +------------------------------------------------+
-①录入新员工   ②删除员工   ③返回上级菜单
---------------------------------------------------"""
+① 录入新人员
+② 删除人员
+③ 查看人员列表
+④ 返回上级菜单
+--------------------------------------------------
+"""
 
     while True:
         print(menu)
-        option = input(" 请输入菜单序号：")       # 打印菜单
+        option = input("请输入菜单序号：").strip()
 
-        if option == "1":                        # 如果选择“录入新员工”
-            name = str(input(" 请输入新员工姓名（输入0取消操作）：")).strip()
+        if option == "1":
+            add_employee()
 
-            if name != "0":                      # 只要输入的不是0
-                code = hr.add_new_employee(name) # 人事服务添加新员工，并获得该员工的特征码
-                print(" 请面对摄像头，敲击三次回车键完成拍照！ ")
-                camera.register(code)            # 打开摄像头为员工照相
-                print(" 录入成功！ ")
+        elif option == "2":
+            delete_employee()
 
-        elif option == "2":                      # 如果选择“删除员工”
-            print(hr.get_employee_report())      # 打印员工信息报表
-            id = int(input(" 请输入要删除的员工编号（输入0取消操作）："))
+        elif option == "3":
+            print(hr.get_employee_report())
 
-            if id > 0:                           # 只要输入的不是0
-                if hr.check_id(id):              # 若此编号有对应员工
-                    verification = tool.randomNumber(4)   # 生成随机4位验证码
-
-                    inputVer = input("[" + str(verification) + "]请输入验证码：")
-
-                    if str(verification) == str(inputVer).strip():  # 如果验证码正确
-                        hr.remove_employee(id)                      # 人事服务删除该员工
-                        print(str(id) + "号员工已删除！ ")
-                    else:
-                        print(" 验证码有误，操作取消")
-                else:
-                    print(" 无此员工，操作取消")
-
-        elif option == "3":                      # 如果选择“返回上级菜单”
-            return                               # 退出员工管理功能菜单
+        elif option == "4":
+            return
 
         else:
-            print(" 输入的指令有误，请重新输入！ ")
+            print("输入的指令有误，请重新输入！")
 
 
-# 查看记录
-def check_record():
-    menu = """
-+------------------------------------------------+
-|                查看记录功能菜单                |
-+------------------------------------------------+
-①查看员工列表   ②查看打卡记录   ③返回上级菜单
---------------------------------------------------"""
+# ==========================
+# 新增人员
+# ==========================
+def add_employee():
+    name = input("请输入新人员姓名（输入0取消）：").strip()
 
-    while True:
-        print(menu)
-        option = input(" 请输入菜单序号：")       # 打印菜单
+    if name == "0":
+        return
 
-        if option == "1":                        # 如果选择“查看员工列表”
-            print(hr.get_employee_report())      # 打印员工信息报表
+    if name == "":
+        print("姓名不能为空！")
+        return
 
-        elif option == "2":                      # 如果选择“查看打卡记录”
-            report = hr.get_record_all()
-            print(report)
+    code = hr.add_new_employee(name)
 
-        elif option == "3":                      # 如果选择“返回上级菜单”
-            return                               # 退出查看记录功能菜单
+    print("请面对摄像头，按三次回车键完成拍照！")
 
-        else:
-            print(" 输入的指令有误，请重新输入！ ")
+    camera.register(code)
+
+    print(name + " 录入成功！")
 
 
-# 考勤报表
-def check_report():
-    menu = """
-+------------------------------------------------+
-|                考勤报表功能菜单                |
-+------------------------------------------------+
-①日报   ②月报   ③报表设置   ④返回上级菜单
---------------------------------------------------"""
+# ==========================
+# 删除人员
+# ==========================
+def delete_employee():
+    print(hr.get_employee_report())
 
-    while True:
-        print(menu)
-        option = input(" 请输入菜单序号：")       # 打印菜单
+    try:
+        person_id = int(input("请输入要删除的人员编号（输入0取消）：").strip())
+    except ValueError:
+        print("输入格式错误，请输入数字编号！")
+        return
 
-        if option == "1":                        # 如果选择“日报”
-            while True:
-                date = input(" 输入查询日期，格式为（2008-08-08），输入0则查询今天：")
+    if person_id == 0:
+        return
 
-                if date == "0":                  # 如果只输入0
-                    hr.get_today_report()        # 打印今天的日报
-                    break                        # 打印完之后结束循环
+    if not hr.check_id(person_id):
+        print("无此人员，操作取消！")
+        return
 
-                elif tool.valid_date(date):      # 如果输入的日期格式有效
-                    hr.get_day_report(date)      # 打印指定日期的日报
-                    break                        # 打印完之后结束循环
+    verification = tool.randomNumber(4)
 
-                else:
-                    print(" 日期格式有误，请重新输入！ ")
+    input_ver = input("[" + str(verification) + "] 请输入验证码：").strip()
 
-        elif option == "2":                      # 如果选择“月报”
-            while True:
-                date = input(" 输入查询月份，格式为（2008-08），输入0则查询上个月：")
-
-                if date == "0":                  # 如果只输入0
-                    hr.get_pre_month_report()    # 生成上个月的月报
-                    break                        # 生成完毕之后结束循环
-
-                elif tool.valid_year_month(date): # 如果输入的月份格式有效
-                    hr.get_month_report(date)     # 生成指定月份的月报
-                    break                         # 生成完毕之后结束循环
-
-                else:
-                    print(" 日期格式有误，请重新输入！ ")
-
-        elif option == "3":                      # 如果选择“报表设置”
-            report_config()                      # 进入“报表设置”菜单
-
-        elif option == "4":                      # 如果选择“返回上级菜单”
-            return                               # 退出查看记录功能菜单
-
-        else:
-            print(" 输入的指令有误，请重新输入！ ")
+    if str(verification) == input_ver:
+        hr.remove_employee(person_id)
+        print(str(person_id) + "号人员已删除！")
+    else:
+        print("验证码错误，操作取消！")
 
 
-# 报表设置
-def report_config():
-    menu = """
-+------------------------------------------------+
-|                报表设置功能菜单                |
-+------------------------------------------------+
-①作息时间设置   ②返回上级菜单
---------------------------------------------------"""
+# ==========================
+# 查看当前在馆人员
+# ==========================
+def show_online_people():
+    people = hr.get_online_people()
 
-    while True:
-        print(menu)                              # 打印菜单
-        option = input(" 请输入菜单序号：")
+    print("\n================ 当前在馆人员 ================")
 
-        if option == "1":                        # 如果选择“作息时间设置”
-            while True:
-                work_time = input(" 请设置上班时间，格式为（08:00:00）：")
+    if people is None or len(people) == 0:
+        print("当前暂无人员在馆。")
+        print("============================================")
+        return
 
-                if tool.valid_time(work_time):   # 如果时间格式正确
-                    break                        # 结束循环
-                else:                            # 如果时间格式不对
-                    print(" 上班时间格式错误，请重新输入 ")
+    for record in people:
+        print_record(record)
 
-            while True:
-                close_time = input(" 请设置下班时间，格式为（23:59:59）：")
-
-                if tool.valid_time(close_time):  # 如果时间格式正确
-                    break
-                else:                            # 如果时间格式不对
-                    print(" 下班时间格式错误，请重新输入 ")
-
-            hr.save_work_time(work_time, close_time)  # 保存用户设置的上班时间和下班时间
-            print(" 设置完成，上班时间：" + work_time + "，下班时间为：" + close_time)
-
-        elif option == "2":                      # 如果选择“返回上级菜单”
-            return                               # 退出查看记录功能菜单
-
-        else:
-            print(" 输入的指令有误，请重新输入！ ")
+    print("============================================")
 
 
-hr.load_emp_data()                               # 数据初始化
+# ==========================
+# 查看全部记录
+# ==========================
+def show_all_records():
+    records = hr.get_record_all()
 
-title = """
+    print("\n================ 全部到馆记录 ================")
+
+    if records is None or len(records) == 0:
+        print("暂无到馆记录。")
+        print("============================================")
+        return
+
+    for record in records:
+        print_record(record)
+
+    print("============================================")
+
+
+# ==========================
+# 数据统计
+# ==========================
+def show_statistics():
+    data = hr.system_info()
+
+    print("\n================ 体育馆数据统计 ================")
+    print("人员总数：", data.get("employee_count", 0))
+    print("今日到馆人数：", data.get("today_total", 0))
+    print("当前在馆人数：", data.get("online_total", 0))
+    print("今日离馆人数：", data.get("leave_total", 0))
+    print("平均停留时间：", data.get("average_stay", "00:00:00"))
+
+    peak = hr.get_peak_hour()
+
+    if peak is not None:
+        print("人流高峰时段：{}点，人数：{}".format(
+            peak.get("hour"),
+            peak.get("count")
+        ))
+    else:
+        print("人流高峰时段：暂无数据")
+
+    print("===============================================")
+
+
+# ==========================
+# 打印单条记录
+# ==========================
+def print_record(record):
+    if record is None:
+        return
+
+    print("--------------------------------")
+    print("人员编号：", record.get("person_id", ""))
+    print("姓名：", record.get("name", ""))
+    print("第几个进入场馆：第{}位".format(record.get("arrival_order", "")))
+    print("进入时间：", record.get("enter_time", ""))
+    print("离馆时间：", record.get("leave_time", ""))
+    print("停留时间：", record.get("stay_time", ""))
+    print("状态：", record.get("status", ""))
+    print("--------------------------------")
+
+
+# ==========================
+# 程序入口
+# ==========================
+if __name__ == "__main__":
+    hr.load_emp_data()
+
+    title = """
 ************************************************************
-*                    MR 智能视频打卡系统                    *
+*                  体育馆视频打卡管理系统                  *
 ************************************************************
 """
 
-print(title)                                     # 打印标题
-start()                                         # 自动程序
+    print(title)
+
+    start()
